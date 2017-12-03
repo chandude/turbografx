@@ -23,9 +23,9 @@ namespace asgn5v1
         int numpts = 0;
         int numlines = 0;
         bool gooddata = false;
-        double[,] vertices;
-        double[,] screenPoints;
-        double[,] ctrans = new double[4, 4];  //your main transformation matrix
+        decimal[,] vertices;
+        decimal[,] screenPoints;
+        decimal[,] ctrans = new decimal[4, 4];  //your main transformation matrix
         private ImageList tbimages;
         private ToolBar toolBar1;
         private ToolBarButton transleftbtn;
@@ -49,9 +49,30 @@ namespace asgn5v1
         private ToolBarButton toolBarButton5;
         private ToolBarButton resetbtn;
         private ToolBarButton exitbtn;
+        private Timer rotateTimer;
         int[,] lines;
-        double[] returnVals;
-        double[] toZeroArray;
+        decimal[] returnVals;
+        decimal[] toZeroArray;
+        decimal[,] rotateXMatrix = new decimal[,]  {
+                {1,0,0,0 },
+                {0,Convert.ToDecimal(Math.Cos(0.5)), Convert.ToDecimal(-Math.Sin(0.5)) ,0 },
+                {0,Convert.ToDecimal(Math.Sin(0.5)), Convert.ToDecimal(Math.Cos(0.5)),0 },
+                {0,0,0,1 },
+            };
+
+        decimal[,] rotateYMatrix = new decimal[,] {
+                {Convert.ToDecimal(Math.Cos(0.05)), 0, Convert.ToDecimal(Math.Sin(0.05)),0 },
+                {0,1,0,0 },
+                {Convert.ToDecimal(-Math.Sin(0.05)), 0, Convert.ToDecimal(Math.Cos(0.05)),0 },
+                {0,0,0,1 },
+            };
+
+        decimal[,] rotateZMatrix = new decimal[,] {
+                {Convert.ToDecimal( Math.Cos(0.05)),Convert.ToDecimal(-Math.Sin(0.05)),0,0 },
+                {Convert.ToDecimal(Math.Sin(0.05)),Convert.ToDecimal(Math.Cos(0.05)),0,0 },
+                {0,0,1,0 },
+                {0,0,0,1 },
+            };
 
         public Transformer()
         {
@@ -338,7 +359,7 @@ namespace asgn5v1
         {
             Graphics grfx = pea.Graphics;
             Pen pen = new Pen(Color.White, 3);
-            double temp;
+            decimal temp;
             int k;
 
             if (gooddata)
@@ -349,7 +370,7 @@ namespace asgn5v1
                 {
                     for (int j = 0; j < 4; j++)
                     {
-                        temp = 0.0d;
+                        temp = 0;
                         for (k = 0; k < 4; k++)
                             temp += vertices[i, k] * ctrans[k, j];
                         screenPoints[i, j] = temp;
@@ -439,7 +460,20 @@ namespace asgn5v1
                 MessageBox.Show("***Failed to Open Line Data File***");
                 return false;
             }
-            setIdentity();  //initialize transformation matrix to identity
+
+            setIdentity(ref ctrans);  //initialize transformation matrix to identity
+
+            Translate(-vertices[0, 0], -vertices[0, 1], -vertices[0, 2]);
+
+            decimal scaleFactor = Height / 2 / shapeHeight(vertices);
+
+            decimal centerX = Width / 2;
+            decimal centerY = Height / 2;
+
+            Scale(scaleFactor);
+            Reflect(ref ctrans, 1, -1);
+
+            Translate(centerX, centerY);
 
             return true;
         } // end of GetNewData
@@ -447,20 +481,20 @@ namespace asgn5v1
         void DecodeCoords(ArrayList coorddata)
         {
             //this may allocate slightly more rows that necessary
-            vertices = new double[coorddata.Count, 4];
+            vertices = new decimal[coorddata.Count, 4];
             numpts = 0;
             string[] text = null;
             for (int i = 0; i < coorddata.Count; i++)
             {
                 text = coorddata[i].ToString().Split(' ', ',');
-                vertices[numpts, 0] = double.Parse(text[0]);
-                if (vertices[numpts, 0] < 0.0d) break;
-                vertices[numpts, 1] = double.Parse(text[1]);
-                vertices[numpts, 2] = double.Parse(text[2]);
-                vertices[numpts, 3] = 1.0d;
+                vertices[numpts, 0] = decimal.Parse(text[0]);
+                if (vertices[numpts, 0] < 0) break;
+                vertices[numpts, 1] = decimal.Parse(text[1]);
+                vertices[numpts, 2] = decimal.Parse(text[2]);
+                vertices[numpts, 3] = 1;
                 numpts++;
             }
-            screenPoints = (double[,])vertices.Clone();
+            screenPoints = (decimal[,])vertices.Clone();
             Debug.WriteLine(screenPoints.GetLength(0));
             Debug.WriteLine(screenPoints.GetLength(1));
 
@@ -482,134 +516,171 @@ namespace asgn5v1
             }
         } // end of DecodeLines
 
-        void setIdentity()
+        void setIdentity(ref decimal[,] m)
         {
             Debug.WriteLine(Width + " " + Height);
-            ctrans = new double[,]
+            m = new decimal[,]
              {
-                { 1d, 0d, 0d, 0d },
-                { 0d, -1d, 0d, 0d },
-                { 0d, 0d, 1d, 0d },
-                { 0d, 0d, 0d, 1d }
+                { 1, 0, 0, 0 },
+                { 0, 1, 0, 0 },
+                { 0, 0, 1, 0 },
+                { 0, 0, 0, 1 }
             };
-            screenPoints = (double[,])vertices.Clone();
-            Scale(Math.Sqrt(Width * Height) / 50);
-            Translate((Width / 2) - screenPoints[0, 0], Height - screenPoints[0, 1], 0);
         }// end of setIdentity
 
 
         private void Transformer_Load(object sender, System.EventArgs e)
         {
         }
-        public void Reflect(double x = 1, double y = 1, double z = 1)
+
+        public void Reflect(ref decimal[,] m, decimal x = 1, decimal y = 1, decimal z = 1)
         {
-            
+            decimal[,] reflect = new decimal[,] {
+                { x, 0, 0, 0},
+                { 0, y, 0, 0},
+                { 0, 0, z, 0},
+                { 0, 0, 0, 1},
+            };
+
+            multiplyMatrices(ref m, reflect);
         }
 
-        public void Translate(double x = 0, double y = 0, double z = 0)
+        public decimal shapeHeight(decimal[,] points)
         {
-            double[,] translateMatrix =
+            decimal low = vertices[0, 1];
+            decimal high = low;
+            int rows = points.GetLength(0);
+
+            for (int y = 0; y < rows; ++y)
+            {
+                if (points[y, 1] < low)
+                    low = points[y, 1];
+                else if (points[y, 1] > high)
+                    high = points[y, 1];
+            }
+            return high - low;
+        }
+
+        public void Translate(decimal x = 0, decimal y = 0, decimal z = 0)
+        {
+            decimal[,] translateMatrix =
             {
                 {1,0,0,0 },
                 {0,1,0,0 },
                 {0,0,1,0 },
                 {x,y,z,1 },
             };
-            multiplyMatrices(ctrans, translateMatrix);
+
+            printMatrix(translateMatrix);
+
+            multiplyMatrices(ref ctrans, translateMatrix);
         }
 
-        public void Scale(double scaleAmount)
+        public void Scale(decimal scaleAmount)
         {
-            moveToZero();
-            double[,] scaleMatrix =
+            // moveToZero();
+            decimal[,] scaleMatrix =
             {
                 {scaleAmount,0,0,0 },
                 {0,scaleAmount,0,0 },
                 {0,0,scaleAmount,0 },
                 {0,0,0,1 },
             };
-            multiplyMatrices(ctrans, scaleMatrix);
-            moveBack();
+            multiplyMatrices(ref ctrans, scaleMatrix);
+            // moveBack();
         }
 
         public void moveToZero()
         {
-            returnVals = new double[] { screenPoints[0, 0], screenPoints[0, 1], screenPoints[0, 2] };
-            toZeroArray = new double[] { 0 - returnVals[0], 0 - returnVals[1], 0 - returnVals[2] };
-            Translate(toZeroArray[0], toZeroArray[1], toZeroArray[2]);
+            Console.WriteLine(screenPoints[0, 0]);
+            returnVals = new decimal[] { screenPoints[0, 0], screenPoints[0, 1], screenPoints[0, 2] };
+            Console.WriteLine("ZERO : " + -returnVals[0] + " " + -returnVals[1] + " " + -returnVals[2]);
+            Translate(-returnVals[0], -returnVals[1], -returnVals[2]);
         }
-        // public void moveToYZero()
-        //{
-        //    returnVals = new double[] { screenPoints[0, 0], screenPoints[0, 1], screenPoints[0, 2] };
-        //    toZeroArray = new double[] { returnVals[0], 0 - returnVals[1], returnVals[2] };
-        //    Translate(toZeroArray[0], toZeroArray[1], toZeroArray[2]);
-
-        //}
 
         public void moveBack()
         {
+            Console.WriteLine("BACK : " + returnVals[0] + " " + returnVals[1] + " " + returnVals[2]);
             Translate(returnVals[0], returnVals[1], returnVals[2]);
+        }
+        
+        // MARK:: INTEGRATE WITH OTHER MULTIPLICATION
+        private decimal[,] multMatrices(ref decimal[,] temparr)
+        {
+            decimal value = 0;
+            decimal[,] c = new decimal[4, 4];
+
+            for (int row = 0; row < 4; row++)
+            {
+                for (int col = 0; col < 4; col++)
+                {
+                    value = 0;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        value += ctrans[row, k] * temparr[k, col];
+                    }
+                    c[row, col] = value;
+                }
+            }
+            return c;
+        }
+
+        public void RotateX(object sender, EventArgs e)
+        {
+            RotateX();
+
+            Refresh();
         }
 
         public void RotateX()
         {
+            /*
+            Console.WriteLine("SCREEN POINTS BEFORE : ");
+            printMatrix(screenPoints);
             moveToZero();
-            double[,] rotateMatrix =
-            {
-                {1,0,0,0 },
-                {0,Math.Cos(0.05),-Math.Sin(0.05),0 },
-                {0,Math.Sin(0.05),Math.Cos(0.05),0 },
-                {0,0,0,1 },
-            };
-            multiplyMatrices(ctrans, rotateMatrix);
+            multiplyMatrices(ref ctrans, rotateXMatrix);
+            moveBack();
+            Refresh();
+            Console.WriteLine("SCREEN POINTS AFTER : ");
+            printMatrix(screenPoints); */
+            moveToZero();
+          
+            ctrans = multMatrices(ref rotateXMatrix);
+
             moveBack();
         }
-        
+
         public void RotateY()
         {
             moveToZero();
-            double[,] rotateMatrix =
-            {
-                {Math.Cos(0.05), 0, Math.Sin(0.05),0 },
-                {0,1,0,0 },
-                {-Math.Sin(0.05), 0, Math.Cos(0.05),0 },
-                {0,0,0,1 },
-            };
-            multiplyMatrices(ctrans, rotateMatrix);
+            multiplyMatrices(ref ctrans, rotateYMatrix);
             moveBack();
         }
 
         public void RotateZ()
         {
             moveToZero();
-            double[,] rotateMatrix =
-            {
-                {Math.Cos(0.05),-Math.Sin(0.05),0,0 },
-                {Math.Sin(0.05),Math.Cos(0.05),0,0 },
-                {0,0,1,0 },
-                {0,0,0,1 },
-            };
-            multiplyMatrices(ctrans, rotateMatrix);
+            multiplyMatrices(ref ctrans, rotateZMatrix);
             moveBack();
         }
 
-        public void Shear(double factor = 0)
+        public void Shear(decimal factor = 0)
         {
             moveToZero();
-            double[,] shearMatrix =
+            decimal[,] shearMatrix =
             {
                 {1,0,0,0 },
                 {factor,1,0,0 },
                 {0,0,1,0 },
                 {0,0,0,1 },
             };
-            multiplyMatrices(ctrans, shearMatrix);
+            multiplyMatrices(ref ctrans, shearMatrix);
             moveBack();
 
         }
         public void Reset()
         {
-            setIdentity();
+            setIdentity(ref ctrans);
             Refresh();
         }
 
@@ -618,24 +689,58 @@ namespace asgn5v1
         /// </summary>
         /// <param name="m1"></param>
         /// <param name="m2"></param>
-        public void multiplyMatrices(double [,] m1, double [,] m2)
+        public void multiplyMatrices(ref decimal[,] m1, decimal[,] m2)
         {
-            double temp;
+            decimal temp;
             for (int i = 0; i < 4; i++)
             {
                 for (int j = 0; j < 4; j++)
                 {
-                    temp = 0.0d;
+                    temp = 0;
                     for (int k = 0; k < 4; k++)
                         temp += m1[i, k] * m2[k, j];
                     m1[i, j] = temp;
                 }
+            }
+
+            /*
+            decimal value = 0;
+
+            for (int row = 0; row < 4; row++)
+            {
+                for (int col = 0; col < 4; col++)
+                {
+                    value = 0;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        value += ctrans[row, k] * m2[k, col];
+                    }
+                    m1[row, col] = value;
+                }
+            } */
+
+        }
+
+        public void printMatrix(decimal[,] m)
+        {
+            for (int i = 0; i < m.GetLength(0); ++i)
+            {
+                for (int j = 0; j < m.GetLength(1); ++j)
+                {
+                    Console.Write(m[i, j] + " ");
+                }
+                Console.WriteLine();
             }
         }
 
 
         private void toolBar1_ButtonClick(object sender, System.Windows.Forms.ToolBarButtonClickEventArgs e)
         {
+            if (rotateTimer != null)
+            {
+                Console.WriteLine("STOPZ");
+                rotateTimer.Stop();
+            }
             if (e.Button == transleftbtn)
             {
                 Translate(-75);
@@ -659,17 +764,29 @@ namespace asgn5v1
             }
             else if (e.Button == scaleupbtn)
             {
-                Scale(1.1);
+                moveToZero();
+                decimal s = 1.1M;
+                Scale(s);
+                moveBack();
                 Refresh();
             }
             else if (e.Button == scaledownbtn)
             {
-                Scale(0.9);
+                moveToZero();
+                decimal s = 0.9M;
+                Scale(s);
+                moveBack();
                 Refresh();
             }
             else if (e.Button == rotxby1btn)
             {
+                Console.WriteLine();
+                // printMatrix(ctrans);
+                // printMatrix(screenPoints);
+                Console.WriteLine();
                 RotateX();
+                // printMatrix(ctrans);
+                // printMatrix(screenPoints);
                 Refresh();
             }
             else if (e.Button == rotyby1btn)
@@ -685,8 +802,13 @@ namespace asgn5v1
 
             else if (e.Button == rotxbtn)
             {
-                RotateX();
-                Refresh();
+                // returnVals = new decimal[] { screenPoints[0, 0], screenPoints[0, 1], screenPoints[0, 2] };
+                // Translate(-returnVals[0], -returnVals[1], -returnVals[2]);
+                // Refresh();
+                rotateTimer = new Timer();
+                rotateTimer.Tick += new EventHandler(RotateX);
+                rotateTimer.Interval = 2; // in miliseconds
+                rotateTimer.Start();
             }
             else if (e.Button == rotybtn)
             {
@@ -702,13 +824,15 @@ namespace asgn5v1
 
             else if (e.Button == shearleftbtn)
             {
-                Shear(-.1);
+                decimal s = -.1M;
+                Shear(s);
                 Refresh();
             }
 
             else if (e.Button == shearrightbtn)
             {
-                Shear(.1);
+                decimal s = .1M;
+                Shear(s);
                 Refresh();
             }
 
